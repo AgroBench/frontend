@@ -51,15 +51,21 @@ export function generateWalletKeypair () {
 }
 
 export function decryptWalletBlob (encryptedBlob) {
-  const packed = decodeBase64(encryptedBlob)
-  const nonce = packed.slice(0, 24)
-  const boxed = packed.slice(24)
-  const secretKey = nacl.secretbox.open(boxed, nonce, getOrCreateWalletEncKey())
-  if (!secretKey) return null
-  const keyPair = nacl.sign.keyPair.fromSecretKey(secretKey)
-  return {
-    pubkey: bs58.encode(keyPair.publicKey),
-    secretKey: keyPair.secretKey,
+  try {
+    const packed = decodeBase64(String(encryptedBlob || '').trim())
+    // nonce 24 + Poly1305 MAC 16; blob dummy da seed ("demo") fica bem abaixo disso
+    if (!(packed instanceof Uint8Array) || packed.length < 40) return null
+    const nonce = packed.subarray(0, 24)
+    const boxed = packed.subarray(24)
+    const secretKey = nacl.secretbox.open(boxed, nonce, getOrCreateWalletEncKey())
+    if (!secretKey || secretKey.length !== 64) return null
+    const keyPair = nacl.sign.keyPair.fromSecretKey(secretKey)
+    return {
+      pubkey: bs58.encode(keyPair.publicKey),
+      secretKey: keyPair.secretKey,
+    }
+  } catch {
+    return null
   }
 }
 

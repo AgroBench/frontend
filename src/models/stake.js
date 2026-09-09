@@ -1,7 +1,7 @@
 import api from '@/services/api'
 import { FarmerError, isUnknownFieldError } from './errors'
 import { signWalletTransaction } from './solana'
-import { getWallet, readWalletBlob } from './wallet'
+import { ensureWallet, readWalletBlob } from './wallet'
 
 const LOCK_TX = '/api/v1/chain/stake/lock-tx'
 const LOCK_SUBMIT = '/api/v1/chain/stake/lock-submit'
@@ -99,7 +99,7 @@ export async function submitStakeLockTx (signedTx) {
 }
 
 export async function lockStake () {
-  const wallet = await getWallet()
+  const { wallet } = await ensureWallet()
   const blob = await loadLocalBlob(wallet.pubkey)
   const requested = await requestStakeLockTx({ amount: STAKE_AMOUNT_MICRO })
   if (requested.skipped) return requested.signature || ''
@@ -142,7 +142,7 @@ export async function submitStakeReleaseTx (contributionId, signedTx) {
 }
 
 export async function releaseStake (contributionId) {
-  const wallet = await getWallet()
+  const { wallet } = await ensureWallet()
   const blob = await loadLocalBlob(wallet.pubkey)
   const requested = await requestStakeReleaseTx(contributionId)
   if (requested.skipped) return requested.signature || ''
