@@ -4,13 +4,13 @@ import Fonts from 'unplugin-fonts/vite'
 import { defineConfig } from 'vite'
 import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 
-// https://vitejs.dev/config/
+const apiTarget = process.env.VITE_API_PROXY_TARGET || 'http://localhost:8080'
+
 export default defineConfig({
   plugins: [
     Vue({
       template: { transformAssetUrls },
     }),
-    // https://github.com/vuetifyjs/vuetify-loader/tree/master/packages/vite-plugin#readme
     Vuetify({
       autoImport: true,
       styles: {
@@ -33,6 +33,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('src', import.meta.url)),
+      buffer: 'buffer',
     },
     extensions: [
       '.js',
@@ -45,6 +46,28 @@ export default defineConfig({
     ],
   },
   server: {
+    host: '0.0.0.0',
     port: 3000,
+    strictPort: true,
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
+    hmr: process.env.VITE_HMR_CLIENT_PORT
+      ? {
+          host: process.env.VITE_HMR_HOST || 'localhost',
+          clientPort: Number(process.env.VITE_HMR_CLIENT_PORT),
+        }
+      : {
+          host: process.env.VITE_HMR_HOST || 'localhost',
+        },
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/healthz': { target: apiTarget, changeOrigin: true },
+      '/readyz': { target: apiTarget, changeOrigin: true },
+    },
+  },
+  optimizeDeps: {
+    include: ['buffer', '@solana/web3.js'],
   },
 })
