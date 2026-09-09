@@ -127,7 +127,7 @@
   import { getProducerBenchmark } from '@/models/benchmark'
   import { cycleTitle, listCultures, listMicroRegions, regionName } from '@/models/catalog'
   import { listContributions } from '@/models/contribution'
-  import { isCycleAccepting, listCycles } from '@/models/cycle'
+  import { isCycleAccepting, listCycles, pickPreferredCycle, producerConsultableCycles } from '@/models/cycle'
   import { apiError } from '@/models/errors'
   import {
     CONTRIBUTION_STATUS_LABEL,
@@ -244,12 +244,11 @@
       cycles.value = await listCycles()
       openCycles.value = cycles.value.filter((c) => isCycleAccepting(c))
       contributions.value = await listContributions()
-      const regionID = property.value?.micro_region_id
-      const aggregated = cycles.value.find((c) => c.status === 'aggregated' && (!regionID || c.micro_region_id === regionID))
-        || cycles.value.find((c) => c.status === 'aggregated')
-      if (aggregated) {
+      const consultable = producerConsultableCycles(cycles.value, contributions.value)
+      const preferredID = pickPreferredCycle(consultable, property.value?.micro_region_id)
+      if (preferredID) {
         try {
-          const data = await getProducerBenchmark(aggregated.id)
+          const data = await getProducerBenchmark(preferredID)
           const cost = (data.metrics || []).find((m) => m.metric === 'total_cost_ha')
           if (cost?.mean != null) regionalCost.value = cost.mean
         } catch {

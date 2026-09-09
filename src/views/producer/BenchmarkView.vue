@@ -28,6 +28,7 @@
     </v-alert>
 
     <v-select
+      v-if="cycleItems.length"
       v-model="cycleId"
       :items="cycleItems"
       item-title="title"
@@ -70,7 +71,13 @@
   import PageHeader from '@/components/PageHeader.vue'
   import { getProducerBenchmark } from '@/models/benchmark'
   import { cycleTitle, listCultures, listMicroRegions } from '@/models/catalog'
-  import { listCycles } from '@/models/cycle'
+  import { listContributions } from '@/models/contribution'
+  import {
+    listCycles,
+    pickPreferredCycle,
+    producerConsultableCycles,
+    producerLockProgress,
+  } from '@/models/cycle'
   import { apiError, apiErrorBody } from '@/models/errors'
   import { CYCLE_STATUS_LABEL, formatBrl, parseLockProgress } from '@/models/labels'
   import { getProperty } from '@/models/property'
@@ -132,12 +139,18 @@
     try {
       cultures.value = await listCultures()
       regions.value = await listMicroRegions()
-      cycles.value = await listCycles()
-      const property = await getProperty()
-      const regionID = property?.micro_region_id
-      const aggregated = cycles.value.find((c) => c.status === 'aggregated' && (!regionID || c.micro_region_id === regionID))
-        || cycles.value.find((c) => c.status === 'aggregated')
-      cycleId.value = aggregated?.id || cycles.value[0]?.id || ''
+      const [allCycles, contributions, property] = await Promise.all([
+        listCycles(),
+        listContributions().catch(() => []),
+        getProperty().catch(() => null),
+      ])
+      cycles.value = producerConsultableCycles(allCycles, contributions)
+      if (!cycles.value.length) {
+        lockProgress.value = producerLockProgress(allCycles, contributions)
+        locked.value = 'A comparação com a região libera depois de três safras confirmadas seguidas, na mesma cultura e lugar. Continue enviando — a recompensa da contribuição já pode cair na sua conta antes disso.'
+        return
+      }
+      cycleId.value = pickPreferredCycle(cycles.value, property?.micro_region_id)
       await load()
     } catch (err) {
       error.value = apiError(err)

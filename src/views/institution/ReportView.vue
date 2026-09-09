@@ -9,6 +9,7 @@
     <ErrorAlert :message="error" @clear="error = ''" />
 
     <v-select
+      v-if="cycleItems.length"
       v-model="cycleId"
       :items="cycleItems"
       item-title="title"
@@ -19,6 +20,14 @@
     />
 
     <MetricGrid v-if="metrics.length" :items="metrics" />
+    <EmptyState
+      v-else-if="!cycleItems.length && !loading"
+      icon="mdi-file-chart-outline"
+      :title="emptyTitle"
+      :description="emptyDescription"
+      :action="emptyAction"
+      :to="emptyTo"
+    />
     <EmptyState
       v-else-if="cycleId && !loading"
       icon="mdi-file-chart-outline"
@@ -36,8 +45,9 @@
   import PageHeader from '@/components/PageHeader.vue'
   import { getInstitutionReport } from '@/models/benchmark'
   import { cycleTitle, listCultures, listMicroRegions } from '@/models/catalog'
-  import { listCycles } from '@/models/cycle'
+  import { institutionConsultableCycles, listCycles } from '@/models/cycle'
   import { apiError } from '@/models/errors'
+  import { getInstitutionMe } from '@/models/institution'
   import { CYCLE_STATUS_LABEL } from '@/models/labels'
 
   const loading = ref(false)
@@ -47,11 +57,23 @@
   const cultures = ref([])
   const regions = ref([])
   const metrics = ref([])
+  const hasSubscription = ref(false)
 
   const cycleItems = computed(() => cycles.value.map((c) => ({
     title: `${cycleTitle(c, cultures.value, regions.value)} · ${CYCLE_STATUS_LABEL[c.status] || ''}`,
     value: c.id,
   })))
+
+  const emptyTitle = computed(() => hasSubscription.value
+    ? 'Nenhuma safra no seu recorte'
+    : 'O relatório ainda não está liberado')
+
+  const emptyDescription = computed(() => hasSubscription.value
+    ? 'Quando a média da safra for consolidada nas regiões do seu acesso, ela aparece aqui.'
+    : 'Contrate o acesso regional ou nacional para consultar os indicadores da safra.')
+
+  const emptyAction = computed(() => hasSubscription.value ? '' : 'Contratar acesso')
+  const emptyTo = computed(() => hasSubscription.value ? null : '/inst/assinatura')
 
   async function load () {
     if (!cycleId.value) return
@@ -72,9 +94,11 @@
     try {
       cultures.value = await listCultures()
       regions.value = await listMicroRegions()
-      cycles.value = await listCycles()
-      cycleId.value = cycles.value.find((c) => c.status === 'aggregated')?.id || cycles.value[0]?.id || ''
-      await load()
+      const [allCycles, me] = await Promise.all([listCycles(), getInstitutionMe()])
+      hasSubscription.value = me?.subscription?.status === 'active'
+      cycles.value = institutionConsultableCycles(allCycles, me?.subscription)
+      cycleId.value = cycles.value[0]?.id || ''
+      if (cycleId.value) await load()
     } catch (err) {
       error.value = apiError(err)
     }

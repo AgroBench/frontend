@@ -39,8 +39,10 @@
     <h2 class="text-h6 mb-4">Safras em acompanhamento</h2>
     <EmptyState
       v-if="!cycles.length"
-      title="Nenhuma safra listada"
-      description="Quando a operação abrir janelas de envio, elas aparecem aqui."
+      :title="emptyTitle"
+      :description="emptyDescription"
+      :action="emptyAction"
+      :to="emptyTo"
     />
     <v-row v-else>
       <v-col v-for="c in cycles.slice(0, 6)" :key="c.id" cols="12" md="4">
@@ -64,7 +66,7 @@
   import PageHeader from '@/components/PageHeader.vue'
   import StatusChip from '@/components/StatusChip.vue'
   import { cycleTitle, listCultures, listMicroRegions } from '@/models/catalog'
-  import { listCycles } from '@/models/cycle'
+  import { institutionConsultableCycles, listCycles } from '@/models/cycle'
   import { apiError } from '@/models/errors'
   import { getInstitutionMe } from '@/models/institution'
   import { CYCLE_STATUS_LABEL, formatDateShort, INSTITUTION_STATUS_LABEL } from '@/models/labels'
@@ -75,7 +77,20 @@
   const cultures = ref([])
   const regions = ref([])
 
-  const aggregatedCount = computed(() => cycles.value.filter((c) => c.status === 'aggregated').length)
+  const aggregatedCount = computed(() => cycles.value.length)
+
+  const hasSubscription = computed(() => me.value?.subscription?.status === 'active')
+
+  const emptyTitle = computed(() => hasSubscription.value
+    ? 'Nenhuma safra no seu recorte'
+    : 'Acesso ainda não contratado')
+
+  const emptyDescription = computed(() => hasSubscription.value
+    ? 'Quando a média da safra for consolidada nas regiões do seu acesso, ela aparece aqui.'
+    : 'Contrate o acesso regional ou nacional para acompanhar os indicadores da safra.')
+
+  const emptyAction = computed(() => hasSubscription.value ? '' : 'Contratar acesso')
+  const emptyTo = computed(() => hasSubscription.value ? null : '/inst/assinatura')
 
   const statusStory = computed(() => {
     if (me.value?.status === 'pending') {
@@ -99,6 +114,14 @@
         to: '/inst',
       }
     }
+    if (hasSubscription.value) {
+      return {
+        title: 'Veja os indicadores da safra',
+        body: 'Custo, produtividade e risco das regiões do seu acesso — sem dado individual de agricultor.',
+        action: 'Abrir relatório',
+        to: '/inst/relatorio',
+      }
+    }
     return {
       title: 'Liberar o relatório da safra',
       body: 'Escolha o recorte regional ou o Brasil inteiro. Na demonstração, a confirmação do acesso é imediata.',
@@ -112,7 +135,8 @@
       me.value = await getInstitutionMe()
       cultures.value = await listCultures()
       regions.value = await listMicroRegions()
-      cycles.value = await listCycles()
+      const allCycles = await listCycles()
+      cycles.value = institutionConsultableCycles(allCycles, me.value?.subscription)
     } catch (err) {
       error.value = apiError(err)
     }
